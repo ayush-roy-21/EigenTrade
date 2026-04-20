@@ -71,3 +71,49 @@ CREATE TABLE trade_log (
     reason          VARCHAR2(200),
     ai_explanation  CLOB
 );
+
+-- ============================================================================
+-- Ingestion staging and audit tables (production operations)
+-- ============================================================================
+
+CREATE TABLE ingestion_stage_data (
+    stage_id         NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    run_id           VARCHAR2(64) NOT NULL,
+    source           VARCHAR2(30) NOT NULL,
+    event_id         VARCHAR2(64) NOT NULL,
+    symbol           VARCHAR2(20) NOT NULL,
+    event_time       TIMESTAMP NOT NULL,
+    open_price       NUMBER(12,4),
+    high_price       NUMBER(12,4),
+    low_price        NUMBER(12,4),
+    close_price      NUMBER(12,4),
+    volume           NUMBER(15),
+    ingest_status    VARCHAR2(20) DEFAULT 'STAGED',
+    ingested_at      TIMESTAMP DEFAULT SYSTIMESTAMP,
+    CONSTRAINT uq_ingestion_event UNIQUE (source, event_id)
+);
+
+CREATE INDEX idx_ing_stage_run ON ingestion_stage_data (run_id);
+CREATE INDEX idx_ing_stage_symbol_time ON ingestion_stage_data (symbol, event_time);
+
+CREATE TABLE ingestion_run_audit (
+    audit_id          NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    run_id            VARCHAR2(64) NOT NULL,
+    source            VARCHAR2(30) NOT NULL,
+    status            VARCHAR2(20) NOT NULL,
+    rows_fetched      NUMBER DEFAULT 0,
+    rows_normalized   NUMBER DEFAULT 0,
+    rows_loaded       NUMBER DEFAULT 0,
+    retries_used      NUMBER DEFAULT 0,
+    start_time        TIMESTAMP,
+    end_time          TIMESTAMP,
+    duration_ms       NUMBER(12,2),
+    checkpoint_from   TIMESTAMP,
+    checkpoint_to     TIMESTAMP,
+    error_message     VARCHAR2(2000),
+    dead_letter_path  VARCHAR2(500),
+    created_at        TIMESTAMP DEFAULT SYSTIMESTAMP,
+    CONSTRAINT uq_ingestion_run UNIQUE (run_id)
+);
+
+CREATE INDEX idx_ing_audit_status_time ON ingestion_run_audit (status, created_at);

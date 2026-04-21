@@ -20,10 +20,14 @@ This checklist is optimized for a same-day submission of EigenTrades.
 
 - [ ] Apply schema objects:
   - Run sql/schema.sql in Oracle
+- [ ] Apply optimization objects:
+  - Run sql/optimization_strategy.sql in Oracle
 - [ ] Confirm required ingestion tables exist:
   - historical_trade_data
   - ingestion_stage_data
   - ingestion_run_audit
+- [ ] Confirm optimization materialized view exists:
+  - market_signals
 - [ ] Validate at least one successful ingestion audit row exists.
 
 ## 3. Tests and Quality Gates

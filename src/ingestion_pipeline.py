@@ -35,6 +35,8 @@ class PipelineConfig:
 	max_retries: int
 	retry_backoff_seconds: int
 	audit_to_db: bool
+	enable_db_optimization: bool
+	require_db_optimization: bool
 
 	@classmethod
 	def from_env(cls) -> "PipelineConfig":
@@ -51,7 +53,64 @@ class PipelineConfig:
 			max_retries=int(os.getenv("INGESTION_MAX_RETRIES", "3")),
 			retry_backoff_seconds=int(os.getenv("INGESTION_RETRY_BACKOFF_SECONDS", "2")),
 			audit_to_db=os.getenv("INGESTION_AUDIT_TO_DB", "true").strip().lower() == "true",
+			enable_db_optimization=os.getenv("INGESTION_ENABLE_DB_OPTIMIZATION", "true").strip().lower() == "true",
+			require_db_optimization=os.getenv("INGESTION_REQUIRE_DB_OPTIMIZATION", "false").strip().lower() == "true",
 		)
+
+
+class OracleOptimizationManager:
+	"""Ensures optimization SQL objects are present and refreshed at runtime."""
+
+	MVIEW_CHECK_SQL = """
+		SELECT mview_name
+		FROM user_mviews
+		WHERE mview_name = 'MARKET_SIGNALS'
+	"""
+
+	REFRESH_SQL = """
+		BEGIN
+			DBMS_MVIEW.REFRESH('MARKET_SIGNALS', 'F');
+		END;
+	"""
+
+	def __init__(self, client: OracleClient, strict: bool = False):
+		self.client = client
+		self.strict = strict
+		self._has_market_signals: bool | None = None
+
+	def verify(self) -> bool:
+		if self._has_market_signals is not None:
+			return self._has_market_signals
+
+		rows = self.client.fetch_all(self.MVIEW_CHECK_SQL)
+		has_mview = len(rows) > 0
+		self._has_market_signals = has_mview
+
+		if has_mview:
+			logger.info("DB optimization active: materialized view MARKET_SIGNALS detected")
+			return True
+
+		message = (
+			"DB optimization inactive: MARKET_SIGNALS not found. "
+			"Apply sql/optimization_strategy.sql in Oracle to enable optimized feature retrieval."
+		)
+		if self.strict:
+			raise RuntimeError(message)
+		logger.warning(message)
+		return False
+
+	def refresh(self) -> None:
+		if not self.verify():
+			return
+
+		try:
+			self.client.execute(self.REFRESH_SQL)
+			logger.info("Refreshed MARKET_SIGNALS materialized view")
+		except Exception as exc:
+			if "ORA-12003" in str(exc) or "ORA-12018" in str(exc):
+				logger.warning("Could not fast-refresh MARKET_SIGNALS; check materialized view logs and refresh mode")
+				return
+			raise
 
 
 @dataclass
@@ -385,6 +444,7 @@ class IngestionPipeline:
 		checkpoint: CheckpointStore,
 		dead_letter: DeadLetterSink,
 		audit: IngestionAuditWriter,
+		optimization: OracleOptimizationManager | None = None,
 	):
 		self.config = config
 		self.source = source
@@ -392,6 +452,7 @@ class IngestionPipeline:
 		self.checkpoint = checkpoint
 		self.dead_letter = dead_letter
 		self.audit = audit
+		self.optimization = optimization
 
 	def run_once(self) -> dict[str, Any]:
 		stats = IngestionRunStats(
@@ -405,6 +466,9 @@ class IngestionPipeline:
 		incoming = pd.DataFrame()
 		started = time.time()
 		try:
+			if self.optimization is not None:
+				self.optimization.verify()
+
 			incoming = self._fetch_with_retries(stats)
 			stats.rows_fetched = int(len(incoming))
 
@@ -418,6 +482,9 @@ class IngestionPipeline:
 				batch_size=self.config.batch_size,
 			)
 			stats.rows_loaded = int(loaded)
+
+			if self.optimization is not None and loaded > 0:
+				self.optimization.refresh()
 
 			if not normalized.empty:
 				max_ts = pd.Timestamp(normalized["time"].max()).to_pydatetime()
@@ -498,6 +565,11 @@ def build_pipeline_from_env() -> IngestionPipeline:
 	checkpoint = CheckpointStore(cfg.checkpoint_file)
 	dead_letter = DeadLetterSink(cfg.dead_letter_dir)
 	audit = IngestionAuditWriter(client if cfg.audit_to_db else None)
+	optimization = (
+		OracleOptimizationManager(client, strict=cfg.require_db_optimization)
+		if cfg.enable_db_optimization
+		else None
+	)
 
 	return IngestionPipeline(
 		config=cfg,
@@ -506,6 +578,7 @@ def build_pipeline_from_env() -> IngestionPipeline:
 		checkpoint=checkpoint,
 		dead_letter=dead_letter,
 		audit=audit,
+		optimization=optimization,
 	)
 
 

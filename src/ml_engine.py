@@ -52,6 +52,19 @@ class MLEngine:
         """Engineer technical features from raw OHLCV data."""
         df = df.copy()
 
+        if 'close' not in df.columns:
+            raise ValueError("Training data must include a 'close' column")
+
+        # Coerce close to numeric so mixed/string CSV sources do not poison feature engineering.
+        df['close'] = pd.to_numeric(df['close'], errors='coerce')
+        df = df.dropna(subset=['close'])
+
+        if len(df) < 30:
+            raise ValueError(
+                "Not enough valid close-price rows for feature engineering. "
+                "Need at least 30 rows with numeric close values."
+            )
+
         # 1. RSI (Relative Strength Index)
         df['rsi'] = calculate_rsi(df['close'], 14)
 
@@ -74,7 +87,14 @@ class MLEngine:
         future_return = df['close'].shift(-5) / df['close'] - 1
         df['target'] = (future_return > 0.01).astype(int)
 
-        return df.dropna()
+        out = df.dropna()
+        if out.empty:
+            raise ValueError(
+                "Feature engineering produced 0 rows. Check data quality and ensure numeric close values "
+                "with sufficient history."
+            )
+
+        return out
 
     def train(self, df: pd.DataFrame) -> dict:
         """
@@ -87,10 +107,26 @@ class MLEngine:
         X = data[self.features]
         y = data['target']
 
+        if len(X) < 5:
+            raise ValueError(
+                "Not enough engineered rows to train. Provide a longer dataset with valid close values."
+            )
+
         # Time-series aware split: 80/20 chronological
         train_size = int(len(X) * 0.8)
+        if train_size < 1 or (len(X) - train_size) < 1:
+            raise ValueError(
+                "Training split is empty. Provide more rows so both train and test sets are non-empty."
+            )
+
         X_train, X_test = X.iloc[:train_size], X.iloc[train_size:]
         y_train, y_test = y.iloc[:train_size], y.iloc[train_size:]
+
+        if y_train.nunique() < 2:
+            raise ValueError(
+                "Training target has only one class after feature engineering. "
+                "Use a larger/more varied dataset."
+            )
 
         # Scale features for Ridge
         X_train_scaled = self.scaler.fit_transform(X_train)

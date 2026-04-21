@@ -1,0 +1,311 @@
+{
+  "project": {
+    "name": "EigenTrades",
+    "tagline": "AI-powered algorithmic trading platform with explainable decisions",
+    "date_prepared": "2026-04-21",
+    "prepared_for": "Class presentation",
+    "objective": "Show end-to-end engineering from data pipeline to ML decisions to human-readable LLM explanations with production-style quality gates"
+  },
+  "executive_summary": {
+    "one_liner": "Built a full pipeline: ingest and normalize market data, train an ensemble prediction engine, explain decisions with LLM logic, and validate through strict CI/testing gates.",
+    "final_status": "All planned phases complete with automated validation.",
+    "key_outcomes": [
+      "Ensemble ML benchmark gate passing (accuracy threshold met)",
+      "LLM explainer latency gate passing (sub-2s threshold met)",
+      "UI boot validated for live demo",
+      "Strict positive and strict negative end-to-end tests implemented"
+    ]
+  },
+  "ui_runtime_validation": {
+    "status": "passed",
+    "validated_command": "python -m streamlit run UI/app.py --server.headless true --server.port 8501",
+    "evidence": {
+      "local_url": "http://localhost:8501",
+      "network_url": "http://10.240.97.92:8501",
+      "external_url": "http://42.104.161.1:8501"
+    },
+    "demo_readiness": "ready"
+  },
+  "architecture": {
+    "pipeline": [
+      "Phase 1: Data infrastructure",
+      "Phase 2: Data ingestion pipeline",
+      "Phase 3: Predictive ML engine",
+      "Phase 4: Database optimization",
+      "Phase 5: LLM explainer module",
+      "Phase 6: Integration and testing"
+    ],
+    "core_modules": [
+      {
+        "file": "src/loaddata.py",
+        "responsibility": "Normalize OHLCV datasets into canonical schema"
+      },
+      {
+        "file": "src/ingestion_pipeline.py",
+        "responsibility": "Production-safe ingestion with retries, checkpoints, dead letter, audit logging, optimization verify/refresh"
+      },
+      {
+        "file": "src/ml_engine.py",
+        "responsibility": "Ridge + RandomForest ensemble with feature engineering and confidence scoring"
+      },
+      {
+        "file": "src/llm_local.py",
+        "responsibility": "Trade signal interpretation via local rules or cloud providers with fallback"
+      },
+      {
+        "file": "src/strategy.py",
+        "responsibility": "Backtesting engine with trade lifecycle and performance metrics"
+      },
+      {
+        "file": "UI/app.py",
+        "responsibility": "Interactive system overview, strategy studio, model lab, explainer and risk dashboards"
+      }
+    ]
+  },
+  "phase_status": {
+    "phase_1_data_infrastructure": {
+      "status": "complete",
+      "assets": [
+        "sql/schema.sql",
+        "data/*.csv"
+      ],
+      "notes": "Oracle schema supports partitioned historical data plus prediction/trade/ingestion audit structures."
+    },
+    "phase_2_data_ingestion_pipeline": {
+      "status": "complete",
+      "implemented_in": "src/ingestion_pipeline.py",
+      "capabilities": [
+        "CSV and HTTP sources",
+        "Normalization and dedupe",
+        "Retry with backoff",
+        "Checkpoint persistence",
+        "Dead-letter output",
+        "Audit writes to Oracle",
+        "Stage table merge with fallback"
+      ]
+    },
+    "phase_3_predictive_ml_engine": {
+      "status": "complete",
+      "implemented_in": "src/ml_engine.py",
+      "modeling_details": {
+        "primary_model": "RidgeClassifier",
+        "secondary_model": "RandomForestClassifier",
+        "ensemble_rule": "average of ridge decision and forest probability",
+        "feature_set": [
+          "rsi",
+          "sma_diff",
+          "macd",
+          "bb_width",
+          "volatility"
+        ],
+        "split_strategy": "chronological 80/20",
+        "signal_threshold": 0.6
+      }
+    },
+    "phase_4_database_optimization": {
+      "status": "complete",
+      "sql_strategy_file": "sql/optimization_strategy.sql",
+      "runtime_integration": "src/ingestion_pipeline.py via OracleOptimizationManager",
+      "optimization_controls": {
+        "INGESTION_ENABLE_DB_OPTIMIZATION": "default true",
+        "INGESTION_REQUIRE_DB_OPTIMIZATION": "default false; set true for strict fail-fast"
+      },
+      "db_objects": [
+        "market_signals materialized view",
+        "partitioned historical_trade_data",
+        "local indexes",
+        "optimized feature query",
+        "bulk load procedure"
+      ]
+    },
+    "phase_5_llm_explainer": {
+      "status": "complete",
+      "implemented_in": "src/llm_local.py",
+      "modes": [
+        "local rule-based",
+        "mistral",
+        "claude",
+        "eigent (optional)"
+      ],
+      "behavior": [
+        "Cloud mode fallback to local when key/client unavailable",
+        "Latency measured and returned per explanation",
+        "Trade and signal level explanations supported"
+      ]
+    },
+    "phase_6_integration_and_testing": {
+      "status": "complete",
+      "ci_file": ".github/workflows/ci.yml",
+      "quality_gates": [
+        "pytest -q",
+        "phase6 benchmark threshold script"
+      ],
+      "test_files": [
+        "tests/test_core_smoke.py",
+        "tests/test_llm_local.py",
+        "tests/test_phase6_e2e.py"
+      ],
+      "strict_e2e_cases": [
+        "positive strict case: optimization present -> ingestion succeeds + refresh + audit",
+        "negative strict case: optimization required but missing -> fail-fast + dead-letter generated"
+      ]
+    }
+  },
+  "benchmarks_and_metrics": {
+    "source": "results/phase6_benchmark.json",
+    "phase6_gate": {
+      "ensemble_accuracy": 0.566465,
+      "minimum_required_accuracy": 0.55,
+      "llm_latency_ms": 0.02,
+      "maximum_allowed_latency_ms": 2000.0,
+      "status": "pass",
+      "passed": true
+    },
+    "interpretation": [
+      "Accuracy gate met with margin above threshold",
+      "LLM local explain latency far below threshold"
+    ]
+  },
+  "ci_cd": {
+    "workflow": ".github/workflows/ci.yml",
+    "steps": [
+      "checkout",
+      "setup python 3.11",
+      "install dependencies",
+      "run pytest",
+      "run phase6 benchmark gate"
+    ],
+    "resulting_behavior": "Build fails if tests fail or if benchmark thresholds are not met"
+  },
+  "dependencies": [
+    "pandas>=1.5",
+    "numpy>=1.24",
+    "streamlit>=1.28",
+    "ta>=0.10.2",
+    "anthropic>=0.7",
+    "python-dotenv>=1.0",
+    "scikit-learn>=1.3",
+    "joblib>=1.3",
+    "openai>=1.0",
+    "requests>=2.31",
+    "oracledb>=2.4"
+  ],
+  "production_deployment_plan": {
+    "status_now": "ready_for_controlled_demo_production",
+    "what_is_verified": [
+      "UI boots",
+      "tests pass",
+      "benchmark gate passes",
+      "optimization integration implemented"
+    ],
+    "required_env_vars": [
+      "ORACLE_USER",
+      "ORACLE_PASSWORD",
+      "ORACLE_DSN",
+      "INGESTION_SOURCE",
+      "INGESTION_CSV_DIR or INGESTION_API_URL",
+      "MISTRAL_API_KEY (optional if using cloud explainer)"
+    ],
+    "deploy_sequence": [
+      "Install dependencies",
+      "Apply sql/schema.sql",
+      "Apply sql/optimization_strategy.sql",
+      "Set runtime environment variables",
+      "Run python src/ingestion_pipeline.py once",
+      "Run python -m streamlit run UI/app.py",
+      "Run pytest and benchmark gate for release validation"
+    ],
+    "strict_mode_recommendation": {
+      "INGESTION_ENABLE_DB_OPTIMIZATION": "true",
+      "INGESTION_REQUIRE_DB_OPTIMIZATION": "true",
+      "why": "Prevents silent non-optimized production runs"
+    }
+  },
+  "what_we_fixed_during_grind": [
+    {
+      "problem": "Optimization strategy existed in SQL/comments but not affecting runtime",
+      "fix": "Integrated OracleOptimizationManager verify/refresh into ingestion run path",
+      "impact": "Optimization is now enforced and observable in pipeline behavior"
+    },
+    {
+      "problem": "Phase 6 had smoke coverage but no strict operational gates",
+      "fix": "Added phase6 benchmark script and CI gate with thresholds",
+      "impact": "Objective pass/fail criteria now automated"
+    },
+    {
+      "problem": "Need deeper e2e validation including failure modes",
+      "fix": "Added strict positive and strict negative ingestion e2e tests with mocked Oracle behavior",
+      "impact": "Fail-fast and recovery behavior validated"
+    },
+    {
+      "problem": "Cloud LLM availability can be inconsistent",
+      "fix": "Retained local fallback mode and tested fallback behavior",
+      "impact": "Demo resilience even without API keys"
+    }
+  ],
+  "demo_script_7_minutes": {
+    "minute_0_1": "Problem statement: black-box trading decisions, need explainability + reliability",
+    "minute_1_2": "Show architecture slide and phase progression",
+    "minute_2_3": "Launch UI and show system overview dashboard",
+    "minute_3_4": "Run Strategy Studio backtest and discuss key metrics",
+    "minute_4_5": "Show LLM explanation output and latency",
+    "minute_5_6": "Show Phase 6 benchmark JSON and CI gate logic",
+    "minute_6_7": "Show strict negative e2e concept and production risk controls"
+  },
+  "slide_blueprint": [
+    "Title and team objective",
+    "Problem statement and why this matters",
+    "Architecture at a glance",
+    "Phase roadmap",
+    "Data infrastructure and schema",
+    "Ingestion pipeline internals",
+    "ML feature engineering and model ensemble",
+    "Prediction confidence and signal logic",
+    "DB optimization strategy",
+    "Runtime integration of optimization",
+    "LLM explainer design",
+    "Fallback and resiliency strategy",
+    "UI modules and user workflow",
+    "Testing pyramid and e2e philosophy",
+    "Strict positive e2e case",
+    "Strict negative e2e case",
+    "CI quality gates",
+    "Benchmark evidence",
+    "Deployment runbook",
+    "Lessons learned and next roadmap"
+  ],
+  "known_limitations_and_next_steps": {
+    "limitations": [
+      "No full cloud infra automation template committed yet",
+      "Operational hardening backlog remains (alerting, autoscaling, secrets manager)",
+      "Some benchmark claims in SQL comments are design targets unless measured on real Oracle workload"
+    ],
+    "next_steps": [
+      "Add deployment automation scripts or IaC",
+      "Add runtime telemetry dashboard for ingestion/latency",
+      "Add periodic retraining orchestration",
+      "Add model drift monitoring"
+    ]
+  },
+  "commands_for_live_demo": {
+    "tests": "python -m pytest -q",
+    "benchmark": "python scripts/phase6_benchmark.py",
+    "ingestion_once": "python src/ingestion_pipeline.py",
+    "ui": "python -m streamlit run UI/app.py"
+  },
+  "presentation_tips": {
+    "story_arc": "From prototype to production-grade quality gates",
+    "what_professor_will_notice": [
+      "You validated both success and failure paths",
+      "You added measurable thresholds, not just features",
+      "You integrated DB optimization into runtime, not only docs",
+      "You can demo locally with deterministic outputs"
+    ],
+    "q_and_a_prepared_answers": [
+      "Why this model: ensemble balances stability and interpretability",
+      "How trustworthy: strict tests plus benchmark gate in CI",
+      "What if external API fails: local explainer fallback",
+      "How production-safe: retries, checkpointing, dead-letter, strict optimization enforcement"
+    ]
+  }
+}

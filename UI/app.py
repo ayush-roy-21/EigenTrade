@@ -1030,7 +1030,12 @@ def tab_model_lab():
         engine = MLEngine(n_estimators=n_estimators, ridge_alpha=ridge_alpha)
 
         with st.spinner("Training Ridge + Random Forest Ensemble..."):
-            metrics = engine.train(df)
+            try:
+                metrics = engine.train(df)
+            except ValueError as e:
+                st.error(f"Model training failed: {e}")
+                st.info("Tip: choose a dataset with enough numeric close-price history (30+ rows).")
+                return
 
         # Results
         st.markdown('<div class="section-header">📊 Training Results</div>', unsafe_allow_html=True)
@@ -1119,7 +1124,12 @@ def tab_signal_explorer():
         explainer = get_explainer("local")
 
         with st.spinner("Training model..."):
-            metrics = engine.train(df)
+            try:
+                metrics = engine.train(df)
+            except ValueError as e:
+                st.error(f"Model training failed: {e}")
+                st.info("Tip: choose a dataset with enough numeric close-price history (30+ rows).")
+                return
 
         st.success(f"Model trained — Ensemble accuracy: {metrics['ensemble_accuracy']*100:.1f}%")
 

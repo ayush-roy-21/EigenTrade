@@ -7,6 +7,7 @@ import types
 
 import numpy as np
 import pandas as pd
+import pytest
 
 # Allow imports from top-level src directory during pytest runs.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -101,6 +102,13 @@ class _MockOracleClient:
         return len(rows)
 
 
+class _MockOracleClientMissingMView(_MockOracleClient):
+    def fetch_all(self, query: str, params=None):
+        if "FROM user_mviews" in query:
+            return []
+        return super().fetch_all(query, params=params)
+
+
 def test_phase6_e2e_ingestion_pipeline_with_optimization(tmp_path: Path, monkeypatch) -> None:
     fake_oracle = types.ModuleType("oracle")
     fake_oracle.OracleClient = object
@@ -161,3 +169,59 @@ def test_phase6_e2e_ingestion_pipeline_with_optimization(tmp_path: Path, monkeyp
     assert "MERGE INTO historical_trade_data" in merged_sql
     assert "INSERT INTO ingestion_run_audit" in merged_sql
     assert "DBMS_MVIEW.REFRESH('MARKET_SIGNALS', 'F')" in merged_sql
+
+
+def test_phase6_e2e_ingestion_fails_when_required_optimization_missing(tmp_path: Path, monkeypatch) -> None:
+    fake_oracle = types.ModuleType("oracle")
+    fake_oracle.OracleClient = object
+    fake_oracle.create_client_from_env = lambda: None
+    monkeypatch.setitem(sys.modules, "oracle", fake_oracle)
+
+    ingestion = importlib.import_module("ingestion_pipeline")
+
+    times = pd.date_range("2024-01-01", periods=2, freq="h", tz="UTC")
+    incoming = pd.DataFrame(
+        {
+            "symbol": ["BANKNIFTY", "BANKNIFTY"],
+            "time": [times[0], times[1]],
+            "open": [100.0, 101.0],
+            "high": [101.0, 102.0],
+            "low": [99.0, 100.0],
+            "close": [100.5, 101.5],
+            "volume": [1000.0, 1200.0],
+        }
+    )
+
+    cfg = ingestion.PipelineConfig(
+        source="csv",
+        csv_dir=tmp_path,
+        api_url="",
+        api_token="",
+        checkpoint_file=tmp_path / "checkpoint.json",
+        dead_letter_dir=tmp_path / "dead_letter",
+        poll_seconds=15,
+        batch_size=500,
+        max_retries=1,
+        retry_backoff_seconds=0,
+        audit_to_db=True,
+        enable_db_optimization=True,
+        require_db_optimization=True,
+    )
+
+    client = _MockOracleClientMissingMView()
+    pipeline = ingestion.IngestionPipeline(
+        config=cfg,
+        source=_MockSource(incoming),
+        loader=ingestion.OracleTradeLoader(client),
+        checkpoint=ingestion.CheckpointStore(cfg.checkpoint_file),
+        dead_letter=ingestion.DeadLetterSink(cfg.dead_letter_dir),
+        audit=ingestion.IngestionAuditWriter(client),
+        optimization=ingestion.OracleOptimizationManager(client, strict=True),
+    )
+
+    with pytest.raises(RuntimeError, match="MARKET_SIGNALS not found"):
+        pipeline.run_once()
+
+    assert not cfg.checkpoint_file.exists()
+    dead_letter_files = list(cfg.dead_letter_dir.glob("ingestion_*.json"))
+    assert dead_letter_files

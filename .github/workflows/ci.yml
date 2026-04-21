@@ -26,3 +26,9 @@ jobs:
 
       - name: Run tests
         run: pytest -q
+
+      - name: Phase 6 benchmark gate
+        env:
+          PHASE6_MIN_ENSEMBLE_ACCURACY: "0.55"
+          PHASE6_MAX_LLM_LATENCY_MS: "2000"
+        run: python scripts/phase6_benchmark.py

@@ -192,7 +192,7 @@ class EigentTradeExplainer:
 
     @property
     def is_ready(self) -> bool:
-        return self._ready and self.agent is not None
+        return self._ready and self._client is not None
 
     def explain_signal(self, signal_data: Dict, features: Dict) -> Dict:
         """Explain a real-time ML trading signal."""

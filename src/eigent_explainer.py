@@ -4,7 +4,7 @@ Inspired by the Eigent (CAMEL) multi-agent framework's structured prompt
 engineering and multi-provider architecture.
 
 Supports: OpenAI, Anthropic (Claude), Ollama, any OpenAI-compatible API,
-          Azure OpenAI, OpenRouter — via direct HTTP calls (no camel-ai needed).
+          Azure OpenAI, OpenRouter, Mistral — via direct HTTP calls (no camel-ai needed).
 
 Works on any Python 3.10+ with just `openai` and/or `anthropic` packages.
 """
@@ -110,6 +110,12 @@ MODEL_PRESETS = {
         "platform": "openrouter",
         "model_type": "anthropic/claude-sonnet-4-20250514",
         "env_key": "OPENROUTER_API_KEY",
+    },
+    "mistral": {
+        "platform": "mistral",
+        "model_type": "mistral-large-latest",
+        "env_key": "MISTRAL_API_KEY",
+        "url": "https://api.mistral.ai/v1",
     },
 }
 

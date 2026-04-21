@@ -22,7 +22,7 @@
 **EigenTrades** is a full-stack algorithmic trading platform that bridges the gap between algorithmic execution and human understanding. It provides:
 
 - **Real-time strategy backtesting** with live parameter tuning
-- **AI-powered trade explanations** using Claude API to explain every trade in plain English
+- **AI-powered trade explanations** using Mistral API to explain every trade in plain English
 - **Professional risk management** dashboard with institutional-grade metrics
 
 ### Core Use Cases
@@ -40,7 +40,7 @@
 | Feature | Description |
 |---------|-------------|
 | **Live Strategy Studio** | Adjust RSI thresholds, MA periods, position sizing on live sliders with instant backtest results |
-| **AI Trade Explainer** | Claude AI explains each trade in plain English (e.g., "Bought because RSI < 30 AND price > 20-day MA") |
+| **AI Trade Explainer** | Mistral AI explains each trade in plain English (e.g., "Bought because RSI < 30 AND price > 20-day MA") |
 | **Risk Dashboard** | Professional metrics: Sharpe ratio, max drawdown, win rate, volatility, profit factor |
 | **Technical Indicators** | RSI, SMA, EMA, MACD, Bollinger Bands, ATR |
 | **Backtesting Engine** | Entry/exit signals, position tracking, P&L calculation, trade history |
@@ -56,7 +56,7 @@
 ┌─────────────────────────────────────────────────────┐
 │              Streamlit UI (app.py)                  │
 │  - Strategy Studio (Live Parameter Tuning)          │
-│  - Trade Explainer (Claude AI Integration)          │
+│  - Trade Explainer (Mistral AI Integration)         │
 │  - Risk Dashboard (Professional Metrics)            │
 └──────────────────┬──────────────────────────────────┘
                    │
@@ -129,7 +129,7 @@ Streamlit-based dashboard with 3 operational modes.
 ---
 
 ### 🤖 Dashboard 2: AI Trade Explainer
-**What it does:** Claude AI explains each trade in plain English
+**What it does:** Mistral AI explains each trade in plain English
 
 **Features:**
 - Select dataset
@@ -202,9 +202,11 @@ Place CSV files in `data/` folder. Required columns:
 - `high` (optional): High price for ATR calculation
 - `low` (optional): Low price for ATR calculation
 
-### Step 3: Set Up Claude API (Optional, for Trade Explainer)
+### Step 3: Set Up Mistral API (Optional, for Trade Explainer)
 ```bash
-set ANTHROPIC_API_KEY=your_api_key_here
+set MISTRAL_API_KEY=your_api_key_here
+set MISTRAL_MODEL=mistral-large-latest
+set MISTRAL_API_URL=https://api.mistral.ai/v1
 ```
 
 ### Step 4: Run the App
@@ -274,8 +276,8 @@ Profit Factor:       2.15
 ## 🔐 Data Privacy
 
 - ✅ Data loaded from local CSV files only
-- ✅ No data sent to external servers (except Claude API for Trade Explainer)
-- ✅ Claude API calls only include trade metadata, not account info
+- ✅ No data sent to external servers (except Mistral API for Trade Explainer)
+- ✅ Mistral API calls only include trade metadata, not account info
 - ✅ Backtest results stored locally in Streamlit session
 
 ---

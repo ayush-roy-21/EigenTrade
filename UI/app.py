@@ -22,12 +22,6 @@ from ml_engine import MLEngine
 from llm_local import ExplainerModule
 
 try:
-    from anthropic import Anthropic
-    HAS_CLAUDE = True
-except ImportError:
-    HAS_CLAUDE = False
-
-try:
     from eigent_explainer import EIGENT_AVAILABLE, get_available_providers, MODEL_PRESETS
     HAS_EIGENT = EIGENT_AVAILABLE
 except ImportError:
@@ -793,7 +787,7 @@ def tab_trade_explainer():
         return
 
     # ── Mode selection ────────────────────────────────────────────────
-    mode_options = ["Local (Fast)", "Claude API"]
+    mode_options = ["Local (Fast)", "Mistral API"]
     if HAS_EIGENT:
         mode_options.append("Eigent AI (Multi-Agent)")
 
@@ -834,8 +828,8 @@ def tab_trade_explainer():
             else:
                 st.info("Set API keys via environment variables or enter them above.")
 
-    if explainer_mode == "Claude API":
-        explainer = get_explainer("claude")
+    if explainer_mode == "Mistral API":
+        explainer = get_explainer("mistral")
     elif explainer_mode == "Eigent AI (Multi-Agent)":
         explainer = get_explainer(
             "eigent",

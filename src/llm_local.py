@@ -4,10 +4,11 @@ Generates real-time, human-readable trade justifications.
 Target: Sub-2 second interpretation latency.
 
 Supports:
-- Claude API (cloud) for rich explanations
+- Mistral API (cloud) for rich explanations
 - Local rule-based fallback for offline/fast mode
 """
 
+import os
 import time
 from typing import Dict, Optional
 import logging
@@ -72,7 +73,7 @@ class ExplainerModule:
     
     Modes:
     - 'local': Rule-based (instant, no API needed)
-    - 'claude': Claude API (richer explanations, requires API key)
+    - 'mistral': Mistral API (richer explanations, requires API key)
     """
 
     def __init__(self, mode: str = "local", eigent_provider: str = "openai",
@@ -80,6 +81,8 @@ class ExplainerModule:
                  eigent_api_url: str | None = None):
         self.mode = mode
         self.claude_client = None
+        self.mistral_client = None
+        self.mistral_model = os.getenv("MISTRAL_MODEL", "mistral-large-latest")
         self.eigent_explainer = None
 
         if mode == "eigent":
@@ -108,6 +111,22 @@ class ExplainerModule:
                 self.claude_client = Anthropic()
             except (ImportError, Exception):
                 self.mode = "local"  # Fallback
+        elif mode == "mistral":
+            try:
+                from openai import OpenAI
+
+                api_key = os.getenv("MISTRAL_API_KEY", "").strip()
+                api_url = os.getenv("MISTRAL_API_URL", "https://api.mistral.ai/v1").strip()
+                self.mistral_model = os.getenv("MISTRAL_MODEL", self.mistral_model).strip() or self.mistral_model
+
+                if not api_key:
+                    logger.warning("MISTRAL_API_KEY is not set — falling back to local mode")
+                    self.mode = "local"
+                else:
+                    self.mistral_client = OpenAI(api_key=api_key, base_url=api_url)
+            except (ImportError, Exception) as e:
+                logger.warning(f"Mistral client init failed: {e} — falling back to local")
+                self.mode = "local"
 
     def explain_signal(self, signal_data: Dict, features: Dict) -> Dict:
         """
@@ -126,6 +145,8 @@ class ExplainerModule:
 
         if self.mode == "eigent" and self.eigent_explainer:
             return self.eigent_explainer.explain_signal(signal_data, features)
+        elif self.mode == "mistral" and self.mistral_client:
+            explanation = self._explain_with_mistral(signal_data, features)
         elif self.mode == "claude" and self.claude_client:
             explanation = self._explain_with_claude(signal_data, features)
         else:
@@ -154,6 +175,8 @@ class ExplainerModule:
 
         if self.mode == "eigent" and self.eigent_explainer:
             return self.eigent_explainer.explain_trade(trade_data, indicators)
+        elif self.mode == "mistral" and self.mistral_client:
+            explanation = self._explain_trade_mistral(trade_data, indicators)
         elif self.mode == "claude" and self.claude_client:
             explanation = self._explain_trade_claude(trade_data, indicators)
         else:
@@ -250,6 +273,61 @@ class ExplainerModule:
         return " ".join(lines)
 
     # ── Claude API Engine ────────────────────────────────────────────────
+
+    def _explain_with_mistral(self, signal_data: Dict, features: Dict) -> str:
+        """Use Mistral API for rich signal explanation."""
+        try:
+            prompt = f"""You are a trading analyst. Explain this ML-generated trading signal concisely:
+
+Signal: {'BUY' if signal_data.get('signal') == 1 else 'HOLD/SELL'}
+Confidence: {signal_data.get('confidence', 0):.0%}
+Top Factor: {signal_data.get('top_factor', 'unknown')}
+
+Feature values:
+- RSI: {features.get('rsi', 'N/A'):.2f}
+- SMA Divergence: {features.get('sma_diff', 'N/A'):.4f}
+- MACD: {features.get('macd', 'N/A'):.4f}
+- BB Width: {features.get('bb_width', 'N/A'):.4f}
+- Volatility: {features.get('volatility', 'N/A'):.4f}
+
+Ridge Regression says: {'BUY' if signal_data.get('ridge_decision') == 1 else 'HOLD'}
+Random Forest probability: {signal_data.get('forest_probability', 0):.0%}
+
+Explain in 2-3 sentences why this signal was generated. Be specific about market conditions."""
+
+            response = self.mistral_client.chat.completions.create(
+                model=self.mistral_model,
+                max_tokens=250,
+                temperature=0.3,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return response.choices[0].message.content
+        except Exception:
+            return self._explain_local(signal_data, features)
+
+    def _explain_trade_mistral(self, trade_data: Dict, indicators: Dict) -> str:
+        """Use Mistral API for rich trade explanation."""
+        try:
+            prompt = f"""A trading algorithm made this trade. Explain in 2-3 sentences:
+
+Entry: ${trade_data.get('entry_price', 0):.2f} on {trade_data.get('entry_date', 'N/A')}
+Exit: ${trade_data.get('exit_price', 0):.2f} on {trade_data.get('exit_date', 'N/A')}
+P&L: ${trade_data.get('pnl', 0):.2f} ({trade_data.get('pnl_pct', 0):+.2f}%)
+Reason: {trade_data.get('reason', 'Technical signal')}
+
+Indicators at entry - RSI: {indicators.get('rsi', 'N/A')}, SMA 20: {indicators.get('sma_20', 'N/A')}, Price: {indicators.get('price', 'N/A')}
+
+Explain in plain English to a non-trader: WHY it entered, WHY it exited, and the result."""
+
+            response = self.mistral_client.chat.completions.create(
+                model=self.mistral_model,
+                max_tokens=200,
+                temperature=0.3,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return response.choices[0].message.content
+        except Exception:
+            return self._explain_trade_local(trade_data, indicators)
 
     def _explain_with_claude(self, signal_data: Dict, features: Dict) -> str:
         """Use Claude API for rich signal explanation."""

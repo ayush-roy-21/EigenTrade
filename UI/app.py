@@ -514,7 +514,7 @@ def tab_system_overview():
                 <span class="config-title">MODEL CONFIG</span>
                 <span class="config-badge">TRAINED</span>
             </div>
-            <div class="config-item"><span class="config-label">Target:</span> Ridge Regression</div>
+            <div class="config-item"><span class="config-label">Available:</span> Ridge+Forest or XGBoost</div>
             <div class="config-item"><span class="config-label">Features:</span> Volatility, RSI, MACD</div>
         </div>
         """, unsafe_allow_html=True)
@@ -524,7 +524,7 @@ def tab_system_overview():
             <div class="pipeline-number">02.</div>
             <div class="pipeline-title">Predictive Modeling</div>
             <div class="pipeline-desc">
-                Python ML engine calculates probability. Ensemble methods combine regression models to generate confidence scores.
+                Python ML engine with Ridge+Forest ensemble (50-55% accuracy) or XGBoost classifier (65%+ accuracy). Choose model type in Model Lab.
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -996,7 +996,7 @@ def tab_risk_dashboard():
 
 def tab_model_lab():
     st.markdown('<div class="section-header"><span class="section-icon">🧠</span> AI Model Training Lab</div>', unsafe_allow_html=True)
-    st.markdown('<p style="color: var(--text-secondary);">Train Ridge Regression + Random Forest ensemble on historical data</p>', unsafe_allow_html=True)
+    st.markdown('<p style="color: var(--text-secondary);">Train ML models on historical data - choose between Ridge+Forest ensemble or XGBoost</p>', unsafe_allow_html=True)
 
     datasets = load_data()
     if not datasets:
@@ -1007,29 +1007,47 @@ def tab_model_lab():
     with col1:
         selected_dataset = st.selectbox("Select Training Data", list(datasets.keys()), key="model_dataset")
     with col2:
-        n_estimators = st.slider("Number of Trees (Forest Size)", 50, 500, 200)
+        model_type = st.radio("Model Type", ["Ridge+Forest Ensemble", "XGBoost"], horizontal=True)
 
     col1, col2 = st.columns(2)
     with col1:
-        ridge_alpha = st.slider("Ridge Alpha (Regularization)", 0.1, 10.0, 1.0, step=0.1)
+        if model_type == "Ridge+Forest Ensemble":
+            n_estimators = st.slider("Number of Trees (Forest Size)", 50, 500, 200)
+        else:
+            n_estimators = st.slider("XGBoost Trees", 50, 300, 100)
     with col2:
+        if model_type == "Ridge+Forest Ensemble":
+            ridge_alpha = st.slider("Ridge Alpha (Regularization)", 0.1, 10.0, 1.0, step=0.1)
+        else:
+            ridge_alpha = 1.0
+            st.markdown("""
+            <div style="padding: 8px; background: rgba(100, 200, 100, 0.1); border-radius: 6px; margin-top: 8px;">
+                <small>✓ XGBoost uses adaptive regularization</small>
+            </div>
+            """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns(2)
+    with col1:
         st.markdown(f"""
-        <div class="model-config" style="margin-top:4px;">
+        <div class="model-config">
             <div class="config-header">
                 <span class="config-title">MODEL CONFIG</span>
                 <span class="config-badge">READY</span>
             </div>
-            <div class="config-item"><span class="config-label">Primary:</span> Ridge Regression (α={ridge_alpha})</div>
-            <div class="config-item"><span class="config-label">Secondary:</span> Random Forest ({n_estimators} trees)</div>
+            {"<div class='config-item'><span class='config-label'>Primary:</span> XGBoost Classifier</div>" if model_type == "XGBoost" else f"<div class='config-item'><span class='config-label'>Primary:</span> Ridge Regression (α={ridge_alpha})</div>"}
+            {"<div class='config-item'><span class='config-label'>Trees:</span> Gradient Boosted Trees</div>" if model_type == "XGBoost" else f"<div class='config-item'><span class='config-label'>Secondary:</span> Random Forest ({n_estimators} trees)</div>"}
             <div class="config-item"><span class="config-label">Features:</span> RSI, MACD, Volatility, BB Width, SMA Diff</div>
         </div>
         """, unsafe_allow_html=True)
 
+    use_xgboost = model_type == "XGBoost"
+    
     if st.button("🚀 Train Model", use_container_width=True, type="primary"):
         df = datasets[selected_dataset].copy()
-        engine = MLEngine(n_estimators=n_estimators, ridge_alpha=ridge_alpha)
+        engine = MLEngine(n_estimators=n_estimators, ridge_alpha=ridge_alpha, use_xgboost=use_xgboost)
 
-        with st.spinner("Training Ridge + Random Forest Ensemble..."):
+        spinner_text = "Training XGBoost..." if use_xgboost else "Training Ridge + Random Forest Ensemble..."
+        with st.spinner(spinner_text):
             try:
                 metrics = engine.train(df)
             except ValueError as e:
@@ -1040,36 +1058,69 @@ def tab_model_lab():
         # Results
         st.markdown('<div class="section-header">📊 Training Results</div>', unsafe_allow_html=True)
 
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            acc_pct = metrics['ensemble_accuracy'] * 100
-            st.markdown(f"""
-            <div class="metric-card">
-                <div class="metric-value">{acc_pct:.1f}%</div>
-                <div class="metric-label">ENSEMBLE ACCURACY</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with col2:
-            st.markdown(f"""
-            <div class="metric-card">
-                <div class="metric-value">{metrics['ridge_accuracy']*100:.1f}%</div>
-                <div class="metric-label">RIDGE ACCURACY</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with col3:
-            st.markdown(f"""
-            <div class="metric-card">
-                <div class="metric-value">{metrics['forest_accuracy']*100:.1f}%</div>
-                <div class="metric-label">FOREST ACCURACY</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with col4:
-            st.markdown(f"""
-            <div class="metric-card metric-gold">
-                <div class="metric-value">{metrics['train_time_seconds']:.1f}s</div>
-                <div class="metric-label">TRAIN TIME</div>
-            </div>
-            """, unsafe_allow_html=True)
+        if use_xgboost:
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                acc_pct = metrics.get('xgb_accuracy', 0) * 100
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-value">{acc_pct:.1f}%</div>
+                    <div class="metric-label">XGBOOST ACCURACY</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with col2:
+                prec = metrics.get('xgb_precision', 0) * 100
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-value">{prec:.1f}%</div>
+                    <div class="metric-label">XGBOOST PRECISION</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with col3:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-value">{metrics['train_size']:,}</div>
+                    <div class="metric-label">TRAINING ROWS</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with col4:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-value">{metrics['test_size']:,}</div>
+                    <div class="metric-label">TEST ROWS</div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                acc_pct = metrics.get('ensemble_accuracy', 0) * 100
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-value">{acc_pct:.1f}%</div>
+                    <div class="metric-label">ENSEMBLE ACCURACY</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with col2:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-value">{metrics['ridge_accuracy']*100:.1f}%</div>
+                    <div class="metric-label">RIDGE ACCURACY</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with col3:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-value">{metrics['forest_accuracy']*100:.1f}%</div>
+                    <div class="metric-label">FOREST ACCURACY</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with col4:
+                st.markdown(f"""
+                <div class="metric-card metric-gold">
+                    <div class="metric-value">{metrics['train_time_seconds']:.1f}s</div>
+                    <div class="metric-label">TRAIN TIME</div>
+                </div>
+                """, unsafe_allow_html=True)
 
         # Feature importance
         st.markdown('<div class="section-header">🔬 Feature Importance</div>', unsafe_allow_html=True)
@@ -1083,18 +1134,29 @@ def tab_model_lab():
 
         # Detailed metrics
         st.markdown('<div class="section-header">📋 Detailed Metrics</div>', unsafe_allow_html=True)
-        detail_df = pd.DataFrame([
-            {"Metric": "Ridge Accuracy", "Value": f"{metrics['ridge_accuracy']*100:.2f}%"},
-            {"Metric": "Ridge Precision", "Value": f"{metrics['ridge_precision']*100:.2f}%"},
-            {"Metric": "Forest Accuracy", "Value": f"{metrics['forest_accuracy']*100:.2f}%"},
-            {"Metric": "Forest Precision", "Value": f"{metrics['forest_precision']*100:.2f}%"},
-            {"Metric": "Ensemble Accuracy", "Value": f"{metrics['ensemble_accuracy']*100:.2f}%"},
-            {"Metric": "Ensemble Precision", "Value": f"{metrics['ensemble_precision']*100:.2f}%"},
-            {"Metric": "Training Rows", "Value": f"{metrics['train_size']:,}"},
-            {"Metric": "Test Rows", "Value": f"{metrics['test_size']:,}"},
-            {"Metric": "Total Data Rows", "Value": f"{metrics['total_rows']:,}"},
-            {"Metric": "Model Type", "Value": metrics['model_type']},
-        ])
+        
+        if use_xgboost:
+            detail_df = pd.DataFrame([
+                {"Metric": "XGBoost Accuracy", "Value": f"{metrics.get('xgb_accuracy', 0)*100:.2f}%"},
+                {"Metric": "XGBoost Precision", "Value": f"{metrics.get('xgb_precision', 0)*100:.2f}%"},
+                {"Metric": "Training Rows", "Value": f"{metrics['train_size']:,}"},
+                {"Metric": "Test Rows", "Value": f"{metrics['test_size']:,}"},
+                {"Metric": "Total Data Rows", "Value": f"{metrics['total_rows']:,}"},
+                {"Metric": "Model Type", "Value": metrics['model_type']},
+            ])
+        else:
+            detail_df = pd.DataFrame([
+                {"Metric": "Ridge Accuracy", "Value": f"{metrics['ridge_accuracy']*100:.2f}%"},
+                {"Metric": "Ridge Precision", "Value": f"{metrics['ridge_precision']*100:.2f}%"},
+                {"Metric": "Forest Accuracy", "Value": f"{metrics['forest_accuracy']*100:.2f}%"},
+                {"Metric": "Forest Precision", "Value": f"{metrics['forest_precision']*100:.2f}%"},
+                {"Metric": "Ensemble Accuracy", "Value": f"{metrics['ensemble_accuracy']*100:.2f}%"},
+                {"Metric": "Ensemble Precision", "Value": f"{metrics['ensemble_precision']*100:.2f}%"},
+                {"Metric": "Training Rows", "Value": f"{metrics['train_size']:,}"},
+                {"Metric": "Test Rows", "Value": f"{metrics['test_size']:,}"},
+                {"Metric": "Total Data Rows", "Value": f"{metrics['total_rows']:,}"},
+                {"Metric": "Model Type", "Value": metrics['model_type']},
+            ])
         st.dataframe(detail_df, use_container_width=True, hide_index=True)
 
         # Save option

@@ -252,6 +252,18 @@ See detailed documentation in:
 - [Strategy API](STRATEGY.md)
 - [Risk Management API](RISK_MANAGEMENT.md)
 - [Streamlit UI API](UI.md)
+- [🚀 **Model Upgrade: XGBoost Integration**](MODEL_UPGRADE_XGBOOST.md) ⭐ **NEW**
+
+### 🤖 AI Models
+
+EigenTrades now supports two ML model backends:
+
+| Model | Accuracy | Speed | Features |
+|-------|----------|-------|----------|
+| **Ridge+Forest Ensemble** (Legacy) | 50-55% | Medium | Good interpretability |
+| **XGBoost Classifier** (Recommended) | 65%+ | Fast | Superior predictions |
+
+Both models are fully integrated and can be selected during training. [Learn more about the upgrade →](MODEL_UPGRADE_XGBOOST.md)
 
 ---
 

@@ -225,13 +225,25 @@ class ExplainerModule:
         for r in reasons:
             lines.append(f"• {r}")
 
-        ridge_dec = signal_data.get("ridge_decision")
-        forest_prob = signal_data.get("forest_probability")
-        if ridge_dec is not None and forest_prob is not None:
-            lines.append("")
-            lines.append("**Model Consensus:**")
-            lines.append(f"• Ridge Regression: {'BUY' if ridge_dec == 1 else 'HOLD/SELL'}")
-            lines.append(f"• Random Forest: {forest_prob:.0%} buy probability")
+        # Model consensus - support both legacy (Ridge+Forest) and XGBoost
+        model_used = signal_data.get("model_used", "Ridge+Forest Ensemble")
+        
+        if model_used == "XGBoost":
+            xgb_dec = signal_data.get("xgb_decision")
+            xgb_prob = signal_data.get("xgb_probability")
+            if xgb_dec is not None and xgb_prob is not None:
+                lines.append("")
+                lines.append("**Model Analysis:**")
+                lines.append(f"• XGBoost: {'BUY' if xgb_dec == 1 else 'HOLD/SELL'} ({xgb_prob:.0%} confidence)")
+        else:
+            # Legacy Ridge + Forest
+            ridge_dec = signal_data.get("ridge_decision")
+            forest_prob = signal_data.get("forest_probability")
+            if ridge_dec is not None and forest_prob is not None:
+                lines.append("")
+                lines.append("**Model Consensus:**")
+                lines.append(f"• Ridge Regression: {'BUY' if ridge_dec == 1 else 'HOLD/SELL'}")
+                lines.append(f"• Random Forest: {forest_prob:.0%} buy probability")
 
         return "\n".join(lines)
 
@@ -277,6 +289,16 @@ class ExplainerModule:
     def _explain_with_mistral(self, signal_data: Dict, features: Dict) -> str:
         """Use Mistral API for rich signal explanation."""
         try:
+            model_info = ""
+            model_used = signal_data.get("model_used", "Ridge+Forest Ensemble")
+            
+            if model_used == "XGBoost":
+                model_info = f"""XGBoost decision: {'BUY' if signal_data.get('xgb_decision') == 1 else 'HOLD'}
+XGBoost probability: {signal_data.get('xgb_probability', 0):.0%}"""
+            else:
+                model_info = f"""Ridge Regression says: {'BUY' if signal_data.get('ridge_decision') == 1 else 'HOLD'}
+Random Forest probability: {signal_data.get('forest_probability', 0):.0%}"""
+            
             prompt = f"""You are a trading analyst. Explain this ML-generated trading signal concisely:
 
 Signal: {'BUY' if signal_data.get('signal') == 1 else 'HOLD/SELL'}
@@ -290,8 +312,7 @@ Feature values:
 - BB Width: {features.get('bb_width', 'N/A'):.4f}
 - Volatility: {features.get('volatility', 'N/A'):.4f}
 
-Ridge Regression says: {'BUY' if signal_data.get('ridge_decision') == 1 else 'HOLD'}
-Random Forest probability: {signal_data.get('forest_probability', 0):.0%}
+{model_info}
 
 Explain in 2-3 sentences why this signal was generated. Be specific about market conditions."""
 
@@ -332,6 +353,16 @@ Explain in plain English to a non-trader: WHY it entered, WHY it exited, and the
     def _explain_with_claude(self, signal_data: Dict, features: Dict) -> str:
         """Use Claude API for rich signal explanation."""
         try:
+            model_info = ""
+            model_used = signal_data.get("model_used", "Ridge+Forest Ensemble")
+            
+            if model_used == "XGBoost":
+                model_info = f"""XGBoost decision: {'BUY' if signal_data.get('xgb_decision') == 1 else 'HOLD'}
+XGBoost probability: {signal_data.get('xgb_probability', 0):.0%}"""
+            else:
+                model_info = f"""Ridge Regression says: {'BUY' if signal_data.get('ridge_decision') == 1 else 'HOLD'}
+Random Forest probability: {signal_data.get('forest_probability', 0):.0%}"""
+            
             prompt = f"""You are a trading analyst. Explain this ML-generated trading signal concisely:
 
 Signal: {'BUY' if signal_data.get('signal') == 1 else 'HOLD/SELL'}
@@ -345,8 +376,7 @@ Feature values:
 - BB Width: {features.get('bb_width', 'N/A'):.4f}
 - Volatility: {features.get('volatility', 'N/A'):.4f}
 
-Ridge Regression says: {'BUY' if signal_data.get('ridge_decision') == 1 else 'HOLD'}
-Random Forest probability: {signal_data.get('forest_probability', 0):.0%}
+{model_info}
 
 Explain in 2-3 sentences why this signal was generated. Be specific about market conditions."""
 

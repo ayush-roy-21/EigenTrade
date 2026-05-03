@@ -262,8 +262,21 @@ class EigentTradeExplainer:
         signal = signal_data.get("signal", 0)
         confidence = signal_data.get("confidence", 0)
         top_factor = signal_data.get("top_factor", "unknown")
-        ridge = signal_data.get("ridge_decision")
-        forest = signal_data.get("forest_probability")
+        model_used = signal_data.get("model_used", "Ridge+Forest Ensemble")
+        
+        # Build model consensus section based on which model was used
+        if model_used == "XGBoost":
+            xgb_decision = signal_data.get("xgb_decision")
+            xgb_prob = signal_data.get("xgb_probability")
+            model_section = f"""**Model Analysis**:
+• XGBoost Decision: {"BUY" if xgb_decision == 1 else "HOLD/SELL" if xgb_decision is not None else "N/A"}
+• XGBoost Buy Probability: {f"{xgb_prob:.0%}" if xgb_prob is not None else "N/A"}"""
+        else:
+            ridge = signal_data.get("ridge_decision")
+            forest = signal_data.get("forest_probability")
+            model_section = f"""**Model Consensus**:
+• Ridge Regression: {"BUY" if ridge == 1 else "HOLD/SELL" if ridge is not None else "N/A"}
+• Random Forest Buy Probability: {f"{forest:.0%}" if forest is not None else "N/A"}"""
 
         return f"""Explain this ML-generated trading signal:
 
@@ -278,9 +291,7 @@ class EigentTradeExplainer:
 • Bollinger Band Width: {features.get('bb_width', 'N/A')}
 • Rolling Volatility: {features.get('volatility', 'N/A')}
 
-**Model Consensus**:
-• Ridge Regression: {"BUY" if ridge == 1 else "HOLD/SELL" if ridge is not None else "N/A"}
-• Random Forest Buy Probability: {f"{forest:.0%}" if forest is not None else "N/A"}
+{model_section}
 
 Explain in 3-5 sentences why this signal was generated. Be specific about
 the market conditions each indicator reveals and whether the models agree."""
